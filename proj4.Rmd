@@ -1,0 +1,94 @@
+---
+title: "Project 4"
+author: "Seamus O'Malley"
+output:
+  pdf_document: default
+---
+
+This data set is about player NBA performances over the span of a season. The *Y* variable I chose was the average points per game (PTS), as I figured it was a useful variable to predict. For the X variables, I decided to do a linear combination of *X1:* 3 points made per game (X3P), *X2:* 2 points made per game (X2P), and *X3:* free throws made per game(FT). I did this because it made sense to me that your points per game encompasses those three possible scoring methods, so using all three I believe I can create a useful and accurate model.
+
+```{r echo=FALSE}
+set.seed(222)
+library(ggplot2)
+d1<-read.csv("cleaned_data.csv")
+#colnames(d1)
+d1 = subset(d1, select = c("PTS","X3P","X2P","FT"))
+#dim(d1)
+#plot(d1,pch=16, cex=1)
+cor(d1[, unlist(lapply(d1, is.numeric))],use = "complete.obs")
+```
+Not a perfect correlation matrix, but decided to continue with data and see how the model does.
+```{r include=FALSE}
+row.number <- sample(1:nrow(d1), 0.8*nrow(d1))
+```
+Splitting the data into training/testing groups (80% data in train, 20% in test).
+```{r}
+train = d1[row.number,]; dim(train)
+test = d1[-row.number,]; dim(test)
+```
+
+Transformed the Y variable to sqrt(Y) as it brings it closer to normal. Still not a perfect normal distribution, but much better than normal Y distribution (highly skewed).
+
+```{r echo=FALSE}
+#ggplot(train, aes(PTS)) + geom_density(fill="blue")
+ggplot(train, aes(sqrt(PTS))) + geom_density(fill="blue")
+```
+
+```{r eval=FALSE, include=FALSE}
+mod1 <- lm(sqrt(PTS) ~ X2P + FT + X3P, data = train)
+summary(mod1)
+cooksd <- cooks.distance(mod1)
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")
+# plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red") # add cutoff line text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooks d, na.rm=T),names(cooksd),""), col="red") # add labels
+
+influential <- as.numeric(names(cooksd)[(cooksd > 4*mean(cooksd, na.rm= T))]) # influential row numbers
+head(d1[influential, ])
+dim(d1[influential, ])
+```
+
+# Part 2
+
+For this model, the adjusted R-squared value is .9504, meaning the linear model accounts for about 95 percent of the variation of sqrt(PTS), and the p-value is less than 2.2e-16, showing that the overall model is statistically significant. In regards to individual components, for PTS, X3P, and X2P, the p value is less than 2e-16 for all 3, showing each variable is statistically significant to the model.
+
+```{r}
+model1 <- lm(sqrt(PTS) ~ X2P + X3P +FT, data = train)
+summary(model1)
+```
+The following is the equation for the multiple linear regression model.
+```{r echo=FALSE}
+cc <- model1$coefficients
+(eqn <- paste("yhat_i=", paste(round(cc[1],2), paste(round(cc[-1],2), paste(names(cc[-1]),"_i",sep=""),
+                                                     sep=" * ", collapse=" + "), sep=" + ")))
+```
+
+```{r eval=FALSE, include=FALSE}
+attach(train)
+library(gridExtra)
+library(ggplot2)
+
+plot1= ggplot(train, aes(X2P, residuals(model1))) + geom_point() + geom_smooth()
+
+plot2= ggplot(train, aes(X3P, residuals(model1))) + geom_point() + geom_smooth()
+
+plot3= ggplot(train, aes(FT, residuals(model1))) + geom_point() + geom_smooth()
+
+
+grid.arrange(plot1,plot2,plot3,ncol=3,nrow=1)
+```
+Testing our prediction model on the testing dataset using model1. This procedure will take the x1, x2, and x3 values in the test data and get a predicted value of yhat_i using Model 1. Then, it will subtract yhat_i from the actual y_i that is given with the x1, x2, and x3 values in the test dataset. Note, I do have to square the predicted values as the linear model predicts the value of sqrt(Y), so squaring will give Y.
+
+Based on RMSE = 1.320892, I can conclude that on an average the predicted value will be off by 1.320892 points from the actual value. I also found the mean absolute percentage error (MAPE) to measure the accuracy of the model. A lower MAPE means less error and more accuracy. In my case, MAPE=16.78%, so my training model has about 17% error in the testing dataset.
+```{r echo=FALSE}
+library(scales)
+pred1 <- predict(model1, newdata = test)
+rmse <- sqrt(sum(((pred1^2) - test$PTS)^2)/length(test$PTS))
+c(RMSE = rmse)
+m.abs = abs((test$PTS-pred1^2)/test$PTS)
+m.abs = m.abs[is.finite(m.abs)]
+mape<-percent(mean(m.abs),accuracy = 0.01)
+c(MAPE=mape)
+
+par(mfrow=c(1,1))
+plot(test$PTS, pred1^2)
+```
